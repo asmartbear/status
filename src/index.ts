@@ -98,10 +98,15 @@ export class StatusManager {
    * Redraw the entire block
    */
   private redrawAllLines(): void {
-    // this.moveCursorToTop(); // Move cursor to the top of the block
+    // Ensure the space exists
     for (let i = 0; i < this.totalLines; i++) {
-      this.writeStatusLine(i)
       process.stdout.write("\n")
+    }
+
+    // Redraw the content
+    for (let i = 0; i < this.totalLines; i++) {
+      this.moveCursorToLine(i)
+      this.writeStatusLine(i)
     }
     this.dirty = false; // Clear the dirty flag after redrawing
   }
@@ -115,28 +120,10 @@ export class StatusManager {
   }
 
   /**
-   * Move cursor to the top of the block
-   */
-  private moveCursorToTop(): void {
-    this.moveCursorToLine(0);
-  }
-
-  /**
    * Move cursor to the bottom of the block (for unhooking and final positioning)
    */
   private moveCursorToBottom(): void {
     process.stdout.write(`\u001b[${process.stdout.rows};1H`);
-  }
-
-  /**
-   * Clear out the entire block area with new lines.
-   */
-  private clear(): void {
-    this.lines = Array(this.totalLines).fill('');
-    for (let i = 0; i < this.totalLines; i++) {
-      console.log("")
-    }
-    console.log("")
   }
 
   /**
@@ -162,7 +149,15 @@ export class StatusManager {
    * Begin the process with blank status lines.
    */
   start(): void {
-    this.clear()
+
+    // Create the space
+    this.lines = Array(this.totalLines).fill('');
+    for (let i = 0; i < this.totalLines; i++) {
+      console.log("")
+    }
+    console.log("")
+
+    // Trap the console functions
     console.log = this.interceptConsole(this.originalLog);
     console.error = this.interceptConsole(this.originalError);
     console.warn = this.interceptConsole(this.originalWarn);
@@ -188,7 +183,7 @@ export class StatusManager {
       // Move the cursor to the top of the block to prepend the external log, if we haven't already
       if (!this.dirty) {
         this.clearLines();
-        this.moveCursorToTop();
+        // this.moveCursorToTop();
         this.dirty = true;
       }
       // Print the intercepted log message
@@ -206,7 +201,7 @@ export class StatusManager {
 // }
 
 // (async () => {
-//   const N_LINES = 10
+//   const N_LINES = 5
 //   const cm = new StatusManager(N_LINES);
 
 //   cm.start()
@@ -217,7 +212,7 @@ export class StatusManager {
 //       console.log("one thing")
 //       console.log("and another")
 //     }
-//     cm.updateLine(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
+//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
 //     await sleep(50)
 //   }
 
