@@ -1,24 +1,23 @@
-# Jobs
+# Status
 
-Simple job-runner with features:
+Command-line status update system
 
-* Max simultaneous threads, but also max-per-tag
-* Priority queue for job-start ordering
-* Priority queue for job-start-after-others-complete ordering
-* Tasks dependent on specific other tasks being complete
+## Usage
 
-## Execution queue
+```typescript
+// A new manager with 10 threads, but doesn't start yet
+const cm = new StatusManager(10);
+// Start the status area, allocating blank space on the console
+cm.start()
+// Update any item, any time
+cm.update(2, "my status")
+// Logging still works -- gets "prepended" before the status area
+console.log("This doesn't overwrite anything.")
+// Stop the status area; subsequent logging goes under it
+cm.stop()
+```
 
-* All else being equal, tasks are started in the order they were enqueued.
-* Tasks will not start based on:
-    * max running tasks per tag
-    * priority queue for others not started
-    * priority queue for others others not completed
-    * dependency on specific other tasks
-* Tasks that have to wait maintain their position in the queue.
-* Any error stops kicking off new tasks, allows existing tasks to complete, and the error is available.
-
-## Development Usage
+## Development
 
 Build:
 

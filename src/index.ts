@@ -142,7 +142,7 @@ export class StatusManager {
   /**
    * Update a single line, which will redraw everything if other console activity happened.
    */
-  updateLine(lineIndex: number, content: string): void {
+  update(lineIndex: number, content: string): void {
     if (lineIndex < 0 || lineIndex >= this.totalLines) {
       throw new Error("Line index out of range");
     }
