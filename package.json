@@ -1,6 +1,6 @@
 {
   "name": "@asmartbear/status",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Display multi-job status on the command-line",
   "keywords": [
     "status",
