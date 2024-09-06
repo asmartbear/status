@@ -62,10 +62,9 @@ export class StatusManager {
   /**
    * Move cursor to a specific line relative to the top of the block.
    */
-  private moveCursorToLine(line: number): void {
+  private moveCursorToLine(line: number, column: number = 0): void {
     const row = this.getTerminalRow(line)
-    const column = 1
-    process.stdout.write(`\u001b[${row};${column}H`);
+    process.stdout.write(`\u001b[${row};${column + 1}H`);
   }
 
   /**
@@ -88,10 +87,15 @@ export class StatusManager {
   /**
    * Writes a line, assuming the cursor is already on the right line.
    */
-  private writeStatusLine(lineIndex: number) {
-    this.clearLine();
+  private writeStatusLine(lineIndex: number, offset: number = 0) {
+    if (offset == 0) {
+      this.clearLine();
+    }
     const truncatedContent = (this.lines[lineIndex] || '').substring(0, (process.stdout.columns || 80) - 1);
-    process.stdout.write(truncatedContent); // Write the updated content
+    process.stdout.write(truncatedContent.substring(offset)); // Write the updated content
+    if (offset > 0) {
+      process.stdout.write('\u001b[0K');   // clear remainder of the line
+    }
   }
 
   /**
@@ -114,9 +118,9 @@ export class StatusManager {
   /**
    * Update just one of the lines.
    */
-  private updateSingleLine(lineIndex: number): void {
-    this.moveCursorToLine(lineIndex);
-    this.writeStatusLine(lineIndex)
+  private updateSingleLine(lineIndex: number, offset: number): void {
+    this.moveCursorToLine(lineIndex, offset);
+    this.writeStatusLine(lineIndex, offset)
   }
 
   /**
@@ -134,16 +138,25 @@ export class StatusManager {
       throw new Error("Line index out of range");
     }
 
-    // Update internal state with the full content (not truncated)
-    // If the state hasn't changed, leave early
-    if (this.lines[lineIndex] === content) return
+    // Update internal state with the full content.
+    // If the state hasn't changed, leave early.
+    // If it has, count how many initial characters we have in common
+    const prev = this.lines[lineIndex]
+    if (prev === content) return
+    let offset = 0
+    const maxOffset = Math.min(content.length, prev.length)
+    for (; offset < maxOffset; ++offset) {
+      if (content[offset] != prev[offset]) {
+        break
+      }
+    }
     this.lines[lineIndex] = content;
 
     // If the screen is dirty, do a full redraw, otherwise update just the one line
     if (this.dirty) {
       this.redrawAllLines();
     } else {
-      this.updateSingleLine(lineIndex);
+      this.updateSingleLine(lineIndex, offset);
     }
     this.moveCursorToBottom()
   }
@@ -215,7 +228,7 @@ export class StatusManager {
 //       console.log("one thing")
 //       console.log("and another")
 //     }
-//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
+//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${Math.random() * 1000000}`);
 //     await sleep(50)
 //   }
 
