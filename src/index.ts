@@ -135,14 +135,17 @@ export class StatusManager {
     }
 
     // Update internal state with the full content (not truncated)
+    // If the state hasn't changed, leave early
+    if (this.lines[lineIndex] === content) return
     this.lines[lineIndex] = content;
 
-    // If the screen is dirty, do a full redraw, otherwise just update one line
+    // If the screen is dirty, do a full redraw, otherwise update just the one line
     if (this.dirty) {
       this.redrawAllLines();
     } else {
       this.updateSingleLine(lineIndex);
     }
+    this.moveCursorToBottom()
   }
 
   /**
