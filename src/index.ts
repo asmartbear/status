@@ -36,20 +36,44 @@ function getCursorPosition(): Promise<{ row: number; column: number }> {
   });
 }
 
-export class StatusManager {
-  private lines: string[] = [];
-  private readonly totalLines: number;
-  private dirty: boolean = false; // Flag to indicate if the screen needs a full redraw
+export class StatusManager<K extends number | string> {
+  /**
+   * Map keys to status messages
+   */
+  private statusLines = new Map<K, string>()
+
+  /**
+   * Map keys to line-numbers in our block
+   */
+  private lineNumbers = new Map<K, number>()
+
+  /**
+   * Flag that means we need to redraw the whole block
+   */
+  private dirty: boolean = false;
 
   private originalLog: (...args: any[]) => void;
   private originalError: (...args: any[]) => void;
   private originalWarn: (...args: any[]) => void;
 
-  constructor(totalLines: number) {
-    this.totalLines = totalLines;
+  constructor() {
     this.originalLog = console.log;
     this.originalError = console.error;
     this.originalWarn = console.warn;
+  }
+
+  /**
+   * Current number of lines in our status block.
+   */
+  private get numLines(): number {
+    return this.statusLines.size
+  }
+
+  /**
+   * Gets an array of keys, in the order that they map to line numbers
+   */
+  private get keys(): K[] {
+    return Array.from(this.lineNumbers.keys())
   }
 
   /**
@@ -78,8 +102,8 @@ export class StatusManager {
    * Clear all lines in the block
    */
   private clearLines(): void {
-    for (let i = 0; i < this.totalLines; i++) {
-      this.moveCursorToLine(i)
+    for (var line = this.numLines; --line >= 0;) {
+      this.moveCursorToLine(line)
       this.clearLine()
     }
   }
@@ -87,11 +111,11 @@ export class StatusManager {
   /**
    * Writes a line, assuming the cursor is already on the right line.
    */
-  private writeStatusLine(lineIndex: number, offset: number = 0) {
+  private writeStatusHere(key: K, offset: number = 0) {
     if (offset == 0) {
       this.clearLine();
     }
-    const truncatedContent = (this.lines[lineIndex] || '').substring(offset, (process.stdout.columns || 80) - 1);
+    const truncatedContent = (this.statusLines.get(key) || '').substring(offset, (process.stdout.columns || 80) - 1);
     process.stdout.write(truncatedContent); // Write the updated content
     if (offset > 0) {
       process.stdout.write('\u001b[0K');   // clear remainder of the line
@@ -99,18 +123,23 @@ export class StatusManager {
   }
 
   /**
-   * Redraw the entire block
+   * Redraw the entire block.
+   * 
+   * @param fromThisSpot if true, assume the cursor is already in the right spot, else move to the right spot
    */
-  private redrawAllLines(): void {
+  private redrawAllLines(fromThisSpot: boolean): void {
+
     // Ensure the space exists
-    for (let i = 0; i < this.totalLines; i++) {
+    if (!fromThisSpot) {
+      this.moveCursorToTop();
+    }
+    for (let i = this.numLines; --i >= 0;) {
       process.stdout.write("\n")
     }
 
     // Redraw the content
-    for (let i = 0; i < this.totalLines; i++) {
-      this.moveCursorToLine(i)
-      this.writeStatusLine(i)
+    for (var key of this.keys) {
+      this.updateSingleLine(key, 0)
     }
     this.dirty = false; // Clear the dirty flag after redrawing
   }
@@ -118,31 +147,53 @@ export class StatusManager {
   /**
    * Update just one of the lines.
    */
-  private updateSingleLine(lineIndex: number, offset: number): void {
-    this.moveCursorToLine(lineIndex, offset);
-    this.writeStatusLine(lineIndex, offset)
+  private updateSingleLine(key: K, offset: number): void {
+    const line = this.lineNumbers.get(key)
+    if (line !== undefined) {
+      this.moveCursorToLine(line, offset);
+      this.writeStatusHere(key)
+    }
   }
 
   /**
-   * Move cursor to the bottom of the block (for unhooking and final positioning)
+   * Move cursor to the bottom of the block.
    */
   private moveCursorToBottom(): void {
     process.stdout.write(`\u001b[${process.stdout.rows};1H`);
   }
 
   /**
+   * Move cursor to the top of the block.
+   */
+  private moveCursorToTop(): void {
+    this.moveCursorToLine(this.numLines - 1)
+  }
+
+  /**
    * Update a single line, which will redraw everything if other console activity happened.
    */
-  update(lineIndex: number, content: string): void {
-    if (lineIndex < 0 || lineIndex >= this.totalLines) {
-      throw new Error("Line index out of range");
-    }
+  update(key: K, content: string): void {
+    var redrawFromThisSpot = true
 
-    // Update internal state with the full content.
-    // If the state hasn't changed, leave early.
-    // If it has, count how many initial characters we have in common
-    const prev = this.lines[lineIndex]
-    if (prev === content) return
+    // Set the line content, and create a new line if needed
+    const prev = this.statusLines.get(key);
+    if (prev) {
+      if (prev == content) return // common optimization
+    } else {
+      // If we already direct, redraw from this spot to make room
+      if (this.dirty) {
+        this.redrawAllLines(true)
+      }
+      // Set the data
+      const lineNumber = this.numLines
+      this.lineNumbers.set(key, lineNumber)    // create the new line number
+      // Add a new line to the bottom to make room
+      this.moveCursorToBottom()   // physically add a new line
+      process.stdout.write("\n")
+      this.dirty = true   // redraw everything
+      redrawFromThisSpot = false    // we've made the space but we're in the wrong position
+    }
+    this.statusLines.set(key, content)
     let offset = 0
     // const maxOffset = Math.min(content.length, prev.length)
     // for (; offset < maxOffset; ++offset) {
@@ -150,13 +201,12 @@ export class StatusManager {
     //     break
     //   }
     // }
-    this.lines[lineIndex] = content;
 
     // If the screen is dirty, do a full redraw, otherwise update just the one line
     if (this.dirty) {
-      this.redrawAllLines();
+      this.redrawAllLines(redrawFromThisSpot);
     } else {
-      this.updateSingleLine(lineIndex, offset);
+      this.updateSingleLine(key, offset);
     }
     this.moveCursorToBottom()
   }
@@ -165,13 +215,6 @@ export class StatusManager {
    * Begin the process with blank status lines.
    */
   start(): void {
-
-    // Create the space
-    this.lines = Array(this.totalLines).fill('');
-    for (let i = 0; i < this.totalLines; i++) {
-      console.log("")
-    }
-    console.log("")
 
     // Trap the console functions
     console.log = this.interceptConsole(this.originalLog);
@@ -196,15 +239,14 @@ export class StatusManager {
    */
   private interceptConsole(originalFn: (...args: any[]) => void) {
     return (...args: any[]): void => {
-      // Move the cursor to the top of the block to prepend the external log, if we haven't already
+      // Clear out the block to make clean space for the log
       if (!this.dirty) {
         this.clearLines();
-        // this.moveCursorToTop();
-        this.dirty = true;
+        this.moveCursorToTop()
+        this.dirty = true;      // will need to redraw when this is over
       }
       // Print the intercepted log message
       originalFn.apply(console, args);
-      // Mark the console as dirty so it redraws on the next update
     };
   }
 }
@@ -218,18 +260,18 @@ export class StatusManager {
 
 // (async () => {
 //   const N_LINES = 5
-//   const cm = new StatusManager(N_LINES);
+//   const cm = new StatusManager<number>();
 
 //   cm.start()
 
-//   for (var i = 0; i < 100; ++i) {
+//   for (var i = 1; i <= 30; ++i) {
 //     const line = Math.floor(Math.random() * N_LINES)
-//     if (i > 0 && i % 10 == 0) {
+//     if (i % 5 == 0) {
 //       console.log("one thing")
 //       console.log("and another")
 //     }
-//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${Math.random() * 1000000}`);
-//     await sleep(50)
+//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
+//     await sleep(200)
 //   }
 
 //   cm.stop()
