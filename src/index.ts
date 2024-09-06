@@ -91,8 +91,8 @@ export class StatusManager {
     if (offset == 0) {
       this.clearLine();
     }
-    const truncatedContent = (this.lines[lineIndex] || '').substring(0, (process.stdout.columns || 80) - 1);
-    process.stdout.write(truncatedContent.substring(offset)); // Write the updated content
+    const truncatedContent = (this.lines[lineIndex] || '').substring(offset, (process.stdout.columns || 80) - 1);
+    process.stdout.write(truncatedContent); // Write the updated content
     if (offset > 0) {
       process.stdout.write('\u001b[0K');   // clear remainder of the line
     }
@@ -144,12 +144,12 @@ export class StatusManager {
     const prev = this.lines[lineIndex]
     if (prev === content) return
     let offset = 0
-    const maxOffset = Math.min(content.length, prev.length)
-    for (; offset < maxOffset; ++offset) {
-      if (content[offset] != prev[offset]) {
-        break
-      }
-    }
+    // const maxOffset = Math.min(content.length, prev.length)
+    // for (; offset < maxOffset; ++offset) {
+    //   if (content[offset] != prev[offset]) {
+    //     break
+    //   }
+    // }
     this.lines[lineIndex] = content;
 
     // If the screen is dirty, do a full redraw, otherwise update just the one line
