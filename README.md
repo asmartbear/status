@@ -5,11 +5,12 @@ Command-line status update system
 ## Usage
 
 ```typescript
-// A new manager with 10 threads, but doesn't start yet
-const cm = new StatusManager(10);
-// Start the status area, allocating blank space on the console
+// A new manager. Nothing happens yet.
+const cm = new StatusManager();
+// Start the status area, though still nothing is printed
 cm.start()
-// Update any item, any time
+// Update items by keys that you invent.  As you add unqiue ones, they are added
+// and console space is allocated without overwriting existing console messages.
 cm.update(2, "my status")
 // Logging still works -- gets "prepended" before the status area
 console.log("This doesn't overwrite anything.")

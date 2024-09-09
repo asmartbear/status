@@ -112,13 +112,9 @@ export class StatusManager<K extends number | string> {
    * Writes a line, assuming the cursor is already on the right line.
    */
   private writeStatusHere(key: K, offset: number = 0) {
-    if (offset == 0) {
-      this.clearLine();
-    } else {
-      process.stdout.write('\u001b[0K');   // clear remainder of the line
-    }
     const truncatedContent = (this.statusLines.get(key) || '').substring(offset, (process.stdout.columns || 80) - 1);
     process.stdout.write(truncatedContent); // Write the updated content
+    process.stdout.write('\u001b[0K');   // Clear remainder of the line
   }
 
   /**
@@ -138,7 +134,7 @@ export class StatusManager<K extends number | string> {
 
     // Redraw the content
     for (var key of this.keys) {
-      this.updateSingleLine(key, 0)
+      this.updateSingleLine(key, 0, 0)
     }
     this.dirty = false; // Clear the dirty flag after redrawing
   }
@@ -146,10 +142,10 @@ export class StatusManager<K extends number | string> {
   /**
    * Update just one of the lines.
    */
-  private updateSingleLine(key: K, offset: number): void {
+  private updateSingleLine(key: K, column: number, offset: number): void {
     const line = this.lineNumbers.get(key)
     if (line !== undefined) {
-      this.moveCursorToLine(line, offset);
+      this.moveCursorToLine(line, column);
       this.writeStatusHere(key, offset)
     }
   }
@@ -197,18 +193,23 @@ export class StatusManager<K extends number | string> {
       redrawFromThisSpot = false    // we've made the space but we're in the wrong position
     }
     this.statusLines.set(key, content)
-    // const maxOffset = Math.min(content.length, prev.length)
-    // for (; offset < maxOffset; ++offset) {
-    //   if (content[offset] != prev[offset]) {
-    //     break
-    //   }
-    // }
+
+    // If we have an offset in the string, convert to a column.
+    // We have to count graphemes, otherwise emoji and such throws us off.
+    let column = 0
+    if (offset > 0) {
+      const graphemes = Array.from(content)
+      for (var i = 0; i < offset;) {
+        i += graphemes[column].length
+        ++column
+      }
+    }
 
     // If the screen is dirty, do a full redraw, otherwise update just the one line
     if (this.dirty) {
       this.redrawAllLines(redrawFromThisSpot);
     } else {
-      this.updateSingleLine(key, offset);
+      this.updateSingleLine(key, column, offset);
     }
     this.moveCursorToBottom()
   }
@@ -279,14 +280,14 @@ export function getCommonPrefixLength(a: string, b: string): number {
 
 //   cm.start()
 
-//   for (var i = 1; i <= 100; ++i) {
+//   for (var i = 1; i <= 500; ++i) {
 //     const line = Math.floor(Math.random() * N_LINES)
 //     if (i % 5 == 0) {
 //       console.log("one thing")
 //       console.log("and another")
 //     }
-//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}: ${"*".repeat(i % 10)}`);
-//     await sleep(100)
+//     cm.update(line, `🏃‍♂️ For line ${line} at ${new Date().toLocaleTimeString()}: ${i}: ${"*".repeat(i % 10)}`);
+//     await sleep(5)
 //   }
 
 //   cm.stop()
