@@ -114,12 +114,11 @@ export class StatusManager<K extends number | string> {
   private writeStatusHere(key: K, offset: number = 0) {
     if (offset == 0) {
       this.clearLine();
+    } else {
+      process.stdout.write('\u001b[0K');   // clear remainder of the line
     }
     const truncatedContent = (this.statusLines.get(key) || '').substring(offset, (process.stdout.columns || 80) - 1);
     process.stdout.write(truncatedContent); // Write the updated content
-    if (offset > 0) {
-      process.stdout.write('\u001b[0K');   // clear remainder of the line
-    }
   }
 
   /**
@@ -280,14 +279,14 @@ export function getCommonPrefixLength(a: string, b: string): number {
 
 //   cm.start()
 
-//   for (var i = 1; i <= 30; ++i) {
+//   for (var i = 1; i <= 100; ++i) {
 //     const line = Math.floor(Math.random() * N_LINES)
 //     if (i % 5 == 0) {
 //       console.log("one thing")
 //       console.log("and another")
 //     }
-//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
-//     await sleep(200)
+//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}: ${"*".repeat(i % 10)}`);
+//     await sleep(100)
 //   }
 
 //   cm.stop()
