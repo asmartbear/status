@@ -151,7 +151,7 @@ export class StatusManager<K extends number | string> {
     const line = this.lineNumbers.get(key)
     if (line !== undefined) {
       this.moveCursorToLine(line, offset);
-      this.writeStatusHere(key)
+      this.writeStatusHere(key, offset)
     }
   }
 
@@ -177,8 +177,12 @@ export class StatusManager<K extends number | string> {
 
     // Set the line content, and create a new line if needed
     const prev = this.statusLines.get(key);
+    let offset = 0
     if (prev) {
-      if (prev == content) return // common optimization
+      // If status is identical, do nothing
+      if (prev == content) return
+      // Check for common prefix, as this means fewer console operations
+      offset = getCommonPrefixLength(prev, content)
     } else {
       // If we already direct, redraw from this spot to make room
       if (this.dirty) {
@@ -194,7 +198,6 @@ export class StatusManager<K extends number | string> {
       redrawFromThisSpot = false    // we've made the space but we're in the wrong position
     }
     this.statusLines.set(key, content)
-    let offset = 0
     // const maxOffset = Math.min(content.length, prev.length)
     // for (; offset < maxOffset; ++offset) {
     //   if (content[offset] != prev[offset]) {
@@ -251,29 +254,42 @@ export class StatusManager<K extends number | string> {
   }
 }
 
+/**
+ * Gets the number of characters that `a` and `b` have in common at their start.
+ * It can be zero, or can be up to the length of the shorter string.
+ */
+export function getCommonPrefixLength(a: string, b: string): number {
+  const n = Math.min(a.length, b.length)
+  var i = 0
+  for (; i < n; ++i) {
+    if (a[i] != b[i]) break
+  }
+  return i
+}
+
 /////////////////////////////////////////////////
 // Example usage
 
-// function sleep(ms: number): Promise<void> {
-//   return new Promise((resolve) => setTimeout(resolve, ms));
-// }
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-// (async () => {
-//   const N_LINES = 5
-//   const cm = new StatusManager<number>();
+(async () => {
+  const N_LINES = 5
+  const cm = new StatusManager<number>();
 
-//   cm.start()
+  cm.start()
 
-//   for (var i = 1; i <= 30; ++i) {
-//     const line = Math.floor(Math.random() * N_LINES)
-//     if (i % 5 == 0) {
-//       console.log("one thing")
-//       console.log("and another")
-//     }
-//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
-//     await sleep(200)
-//   }
+  for (var i = 1; i <= 30; ++i) {
+    const line = Math.floor(Math.random() * N_LINES)
+    if (i % 5 == 0) {
+      console.log("one thing")
+      console.log("and another")
+    }
+    cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
+    await sleep(200)
+  }
 
-//   cm.stop()
+  cm.stop()
 
-// })().then(() => console.log("Done."))
+})().then(() => console.log("Done."))
