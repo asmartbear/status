@@ -270,26 +270,26 @@ export function getCommonPrefixLength(a: string, b: string): number {
 /////////////////////////////////////////////////
 // Example usage
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// function sleep(ms: number): Promise<void> {
+//   return new Promise((resolve) => setTimeout(resolve, ms));
+// }
 
-(async () => {
-  const N_LINES = 5
-  const cm = new StatusManager<number>();
+// (async () => {
+//   const N_LINES = 5
+//   const cm = new StatusManager<number>();
 
-  cm.start()
+//   cm.start()
 
-  for (var i = 1; i <= 30; ++i) {
-    const line = Math.floor(Math.random() * N_LINES)
-    if (i % 5 == 0) {
-      console.log("one thing")
-      console.log("and another")
-    }
-    cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
-    await sleep(200)
-  }
+//   for (var i = 1; i <= 30; ++i) {
+//     const line = Math.floor(Math.random() * N_LINES)
+//     if (i % 5 == 0) {
+//       console.log("one thing")
+//       console.log("and another")
+//     }
+//     cm.update(line, `For line ${line} at ${new Date().toLocaleTimeString()}: ${i}`);
+//     await sleep(200)
+//   }
 
-  cm.stop()
+//   cm.stop()
 
-})().then(() => console.log("Done."))
+// })().then(() => console.log("Done."))
