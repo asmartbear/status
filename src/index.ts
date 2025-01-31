@@ -52,6 +52,23 @@ export class StatusManager<K extends number | string> {
    */
   private dirty: boolean = false;
 
+  /**
+   * When we're in the status-update backoff period, this object will be
+   * non-null, and status updates should be placed there instead of directly
+   * onto the screen.  Otherwise, send the update directly, and start the
+   * backoff period/timer.
+   */
+  private backoffUpdates: Map<K, string> | null = null;
+
+  /**
+   * How often we should refresh the screen, in milliseconds.  This minimizes
+   * the amount of time spent waiting for status updates, which is great when
+   * updates are coming quickly, but potentially decreases the user's experience.
+   * 
+   * It's private and readonly for now, but in fact it could be dynamic or public.
+   */
+  private readonly screenRefreshRateMs: number = 50;
+
   private originalLog: (...args: any[]) => void;
   private originalError: (...args: any[]) => void;
   private originalWarn: (...args: any[]) => void;
@@ -67,13 +84,6 @@ export class StatusManager<K extends number | string> {
    */
   private get numLines(): number {
     return this.statusLines.size
-  }
-
-  /**
-   * Gets an array of keys, in the order that they map to line numbers
-   */
-  private get keys(): K[] {
-    return Array.from(this.lineNumbers.keys())
   }
 
   /**
@@ -133,7 +143,7 @@ export class StatusManager<K extends number | string> {
     }
 
     // Redraw the content
-    for (var key of this.keys) {
+    for (const key of this.lineNumbers.keys()) {
       this.updateSingleLine(key, 0, 0)
     }
     this.dirty = false; // Clear the dirty flag after redrawing
@@ -145,7 +155,7 @@ export class StatusManager<K extends number | string> {
   private updateSingleLine(key: K, column: number, offset: number): void {
     const line = this.lineNumbers.get(key)
     if (line !== undefined) {
-      this.moveCursorToLine(line, column);
+      this.moveCursorToLine(line, column)
       this.writeStatusHere(key, offset)
     }
   }
@@ -166,8 +176,15 @@ export class StatusManager<K extends number | string> {
 
   /**
    * Update a single line, which will redraw everything if other console activity happened.
+   * 
+   * @param key the key indicating which status line; creates a new one if the key doesn't exist
+   * @param content the new content for the line; will be truncated to the width of the terminal
+   * @param always if true, will update the line even if we're in the backoff period, otherwise will honor the screen-refresh rate.
    */
-  update(key: K, content: string): void {
+  update(key: K, content: string): void;
+  update(key: K, content: string, always: boolean): void;
+  update(key: K, content: string, always: null): void;
+  update(key: K, content: string, always: boolean | null = false): void {
     var redrawFromThisSpot = true
 
     // Set the line content, and create a new line if needed
@@ -175,11 +192,26 @@ export class StatusManager<K extends number | string> {
     let offset = 0
     if (prev) {
       // If status is identical, do nothing
-      if (prev == content) return
+      if (prev == content) {
+        return
+      }
+      // If we're in the backoff period, just record the potential update.
+      // There might be many more coming, do don't compute anything else about it.
+      // Although this can be overridden by the user
+      if (this.backoffUpdates) {
+        if (always !== false || this.dirty) {   // if we draw-always, remove this key from the backoff and proceed now
+          if (always !== null) {      // special marker that this is being called from the backoff timer, so just do it without other state changes
+            this.backoffUpdates.delete(key)
+          }
+        } else {        // remember the update for later
+          this.backoffUpdates.set(key, content)
+          return
+        }
+      }
       // Check for common prefix, as this means fewer console operations
       offset = getCommonPrefixLength(prev, content)
     } else {
-      // If we already direct, redraw from this spot to make room
+      // If we're already dirty, redraw from this spot to make room
       if (this.dirty) {
         this.redrawAllLines(true)
       }
@@ -212,6 +244,24 @@ export class StatusManager<K extends number | string> {
       this.updateSingleLine(key, column, offset);
     }
     this.moveCursorToBottom()
+
+    // Start the backoff period if needed
+    if (!this.backoffUpdates) {
+      this.backoffUpdates = new Map<K, string>()
+      setTimeout(() => this.flushBackoffUpdates(), this.screenRefreshRateMs)
+    }
+  }
+
+  /**
+   * Flush any remaining backoff updates, and reset that state.  Does nothing if we're not in backoff mode.
+   */
+  private flushBackoffUpdates() {
+    if (this.backoffUpdates) {
+      for (const [key, content] of this.backoffUpdates) {
+        this.update(key, content, null)
+      }
+      this.backoffUpdates = null
+    }
   }
 
   /**
@@ -229,12 +279,17 @@ export class StatusManager<K extends number | string> {
    * Stop the process, positioning the console for further updates.
    */
   stop(): void {
-    console.log = this.originalLog;
-    console.error = this.originalError;
-    console.warn = this.originalWarn;
+
+    // Flush remaining updates
+    this.flushBackoffUpdates()
 
     // Move the cursor to the bottom of the block to resume normal output
     this.moveCursorToBottom();
+
+    // Restore console functions
+    console.log = this.originalLog;
+    console.error = this.originalError;
+    console.warn = this.originalWarn;
   }
 
   /**
@@ -280,14 +335,14 @@ export function getCommonPrefixLength(a: string, b: string): number {
 
 //   cm.start()
 
-//   for (var i = 1; i <= 500; ++i) {
+//   for (var i = 1; i <= 2000; ++i) {
 //     const line = Math.floor(Math.random() * N_LINES)
-//     if (i % 5 == 0) {
-//       console.log("one thing")
-//       console.log("and another")
+//     if (i % 400 == 0) {
+//       console.warn("one thing")
+//       console.error("and another", Math.random())
 //     }
 //     cm.update(line, `🏃‍♂️ For line ${line} at ${new Date().toLocaleTimeString()}: ${i}: ${"*".repeat(i % 10)}`);
-//     await sleep(5)
+//     await sleep(2)
 //   }
 
 //   cm.stop()

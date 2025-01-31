@@ -12,7 +12,7 @@
       "esnext"
     ],
     "module": "commonjs",
-    "target": "es5",
+    "target": "es2015",
     "types": [
       "jest",
       "node"
