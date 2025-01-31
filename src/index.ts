@@ -61,13 +61,19 @@ export class StatusManager<K extends number | string> {
   private backoffUpdates: Map<K, string> | null = null;
 
   /**
+   * When we're in the backoff period, this is the timer we're using.
+   */
+  private backoffTimer: NodeJS.Timeout | null = null;
+
+  /**
    * How often we should refresh the screen, in milliseconds.  This minimizes
    * the amount of time spent waiting for status updates, which is great when
    * updates are coming quickly, but potentially decreases the user's experience.
    * 
-   * It's private and readonly for now, but in fact it could be dynamic or public.
+   * Clients can adjust this value at any time; it will go into effect after the
+   * next timed update.
    */
-  private readonly screenRefreshRateMs: number = 50;
+  public screenRefreshRateMs: number = 50;
 
   private originalLog: (...args: any[]) => void;
   private originalError: (...args: any[]) => void;
@@ -142,11 +148,18 @@ export class StatusManager<K extends number | string> {
       process.stdout.write("\n")
     }
 
-    // Redraw the content
+    // Redraw the content.
+    // Because we're redrawing everything, there's no longer a need for a backoff period.
+    // Replace our known-lines with the backoff ones, if any, and clear the backoff.
     for (const key of this.lineNumbers.keys()) {
+      const backoffMessage = this.backoffUpdates?.get(key)
+      if (backoffMessage) {
+        this.statusLines.set(key, backoffMessage)   // update directly
+      }
       this.updateSingleLine(key, 0, 0)
     }
     this.dirty = false; // Clear the dirty flag after redrawing
+    this.resetBackoffTimer()    // Reset the backoff from this point
   }
 
   /**
@@ -247,8 +260,7 @@ export class StatusManager<K extends number | string> {
 
     // Start the backoff period if needed
     if (!this.backoffUpdates) {
-      this.backoffUpdates = new Map<K, string>()
-      setTimeout(() => this.flushBackoffUpdates(), this.screenRefreshRateMs)
+      this.resetBackoffTimer()
     }
   }
 
@@ -262,6 +274,14 @@ export class StatusManager<K extends number | string> {
       }
       this.backoffUpdates = null
     }
+  }
+
+  private resetBackoffTimer() {
+    if (this.backoffTimer) {
+      clearTimeout(this.backoffTimer)
+    }
+    this.backoffUpdates = new Map<K, string>()
+    this.backoffTimer = setTimeout(() => this.flushBackoffUpdates(), this.screenRefreshRateMs)
   }
 
   /**
@@ -325,26 +345,26 @@ export function getCommonPrefixLength(a: string, b: string): number {
 /////////////////////////////////////////////////
 // Example usage
 
-// function sleep(ms: number): Promise<void> {
-//   return new Promise((resolve) => setTimeout(resolve, ms));
-// }
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-// (async () => {
-//   const N_LINES = 5
-//   const cm = new StatusManager<number>();
+(async () => {
+  const N_LINES = 5
+  const cm = new StatusManager<number>();
 
-//   cm.start()
+  cm.start()
 
-//   for (var i = 1; i <= 2000; ++i) {
-//     const line = Math.floor(Math.random() * N_LINES)
-//     if (i % 400 == 0) {
-//       console.warn("one thing")
-//       console.error("and another", Math.random())
-//     }
-//     cm.update(line, `🏃‍♂️ For line ${line} at ${new Date().toLocaleTimeString()}: ${i}: ${"*".repeat(i % 10)}`);
-//     await sleep(2)
-//   }
+  for (var i = 1; i <= 2000; ++i) {
+    const line = Math.floor(Math.random() * N_LINES)
+    if (i % 400 == 0) {
+      console.warn("one thing")
+      console.error("and another", Math.random())
+    }
+    cm.update(line, `🏃‍♂️ For line ${line} at ${new Date().toLocaleTimeString()}: ${i}: ${"*".repeat(i % 10)}`);
+    await sleep(2)
+  }
 
-//   cm.stop()
+  cm.stop()
 
-// })().then(() => console.log("Done."))
+})().then(() => console.log("Done."))

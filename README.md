@@ -9,11 +9,13 @@ Command-line status update system
 const cm = new StatusManager();
 // Start the status area, though still nothing is printed
 cm.start()
-// Update items by keys that you invent.  As you add unqiue ones, they are added
+// Update items by keys that you invent.  As you add unique ones, they are added
 // and console space is allocated without overwriting existing console messages.
 cm.update(2, "my status")
 // Logging still works -- gets "prepended" before the status area
 console.log("This doesn't overwrite anything.")
+// Adjust how often the screen refreshes (status updates are batched)
+cm.screenRefreshRateMs = 250
 // Stop the status area; subsequent logging goes under it
 cm.stop()
 ```
