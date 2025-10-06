@@ -294,7 +294,7 @@ export class StatusManager<K extends number | string> {
     }
     this.backoffUpdates = new Map<K, string>()
     this.backoffTimer = setTimeout(() => this.flushBackoffUpdates(true), this.screenRefreshRateMs)
-    this.nextBackoffRefresh = Date.now() + this.screenRefreshRateMs
+    this.nextBackoffRefresh = Date.now() + this.screenRefreshRateMs * 2   // give it time to run in a normal fashion
   }
 
   /**
