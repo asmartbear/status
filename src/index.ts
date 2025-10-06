@@ -66,6 +66,13 @@ export class StatusManager<K extends number | string> {
   private backoffTimer: NodeJS.Timeout | null = null;
 
   /**
+   * When we're in the backoff period, this the milliseconds when we'll refresh next.
+   * If the system is context-switching a lot, our timer will run and we'll refresh.
+   * If not, we might notice that it's been too long, and manually trigger a flush.
+   */
+  private nextBackoffRefresh: number | undefined;
+
+  /**
    * How often we should refresh the screen, in milliseconds.  This minimizes
    * the amount of time spent waiting for status updates, which is great when
    * updates are coming quickly, but potentially decreases the user's experience.
@@ -209,7 +216,7 @@ export class StatusManager<K extends number | string> {
         return
       }
       // If we're in the backoff period, just record the potential update.
-      // There might be many more coming, do don't compute anything else about it.
+      // There might be many more coming, so don't compute anything else about it.
       // Although this can be overridden by the user
       if (this.backoffUpdates) {
         if (always !== false || this.dirty) {   // if we draw-always, remove this key from the backoff and proceed now
@@ -218,6 +225,7 @@ export class StatusManager<K extends number | string> {
           }
         } else {        // remember the update for later
           this.backoffUpdates.set(key, content)
+          this.flushBackoffUpdates(false)     // take this opportunity to ask whether it's actually time to flush
           return
         }
       }
@@ -266,22 +274,27 @@ export class StatusManager<K extends number | string> {
 
   /**
    * Flush any remaining backoff updates, and reset that state.  Does nothing if we're not in backoff mode.
+   * 
+   * @param force if true, always flush.  Otherwise, consult the backoff timer, and don't flush if the timer hasn't elapsed.
    */
-  private flushBackoffUpdates() {
-    if (this.backoffUpdates) {
+  private flushBackoffUpdates(force: boolean) {
+    if (this.backoffUpdates && this.nextBackoffRefresh && (force || Date.now() > this.nextBackoffRefresh)) {
       for (const [key, content] of this.backoffUpdates) {
         this.update(key, content, null)
       }
       this.backoffUpdates = null
+      this.nextBackoffRefresh = undefined
     }
   }
 
   private resetBackoffTimer() {
     if (this.backoffTimer) {
       clearTimeout(this.backoffTimer)
+      this.nextBackoffRefresh = undefined
     }
     this.backoffUpdates = new Map<K, string>()
-    this.backoffTimer = setTimeout(() => this.flushBackoffUpdates(), this.screenRefreshRateMs)
+    this.backoffTimer = setTimeout(() => this.flushBackoffUpdates(true), this.screenRefreshRateMs)
+    this.nextBackoffRefresh = Date.now() + this.screenRefreshRateMs
   }
 
   /**
@@ -301,7 +314,7 @@ export class StatusManager<K extends number | string> {
   stop(): void {
 
     // Flush remaining updates
-    this.flushBackoffUpdates()
+    this.flushBackoffUpdates(true)
 
     // Move the cursor to the bottom of the block to resume normal output
     this.moveCursorToBottom();
